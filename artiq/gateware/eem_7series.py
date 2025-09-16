@@ -143,6 +143,12 @@ def peripheral_shuttler(module, peripheral, **kwargs):
         raise ValueError("wrong number of ports")
     eem.Shuttler.add_std(module, port, port_aux, **kwargs)
 
+def peripheral_entangler(module, peripheral, **kwargs):
+    eem.Entangler.add_std(module,
+                          eem_core_link=peripheral.get("core_link_port", None),
+                          eem_dio_inputs=peripheral["input_port"],
+                          eem_dio_outputs=peripheral["output_port"])
+
 peripheral_processors = {
     "dio": peripheral_dio,
     "dio_spi": peripheral_dio_spi,
@@ -157,6 +163,7 @@ peripheral_processors = {
     "phaser": peripheral_phaser,
     "hvamp": peripheral_hvamp,
     "shuttler": peripheral_shuttler,
+    "entangler": peripheral_entangler,
 }
 
 

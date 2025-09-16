@@ -146,7 +146,7 @@
             "properties": {
                 "type": {
                     "type": "string",
-                    "enum": ["dio", "dio_spi", "urukul", "novogorny", "sampler", "suservo", "zotino", "grabber", "mirny", "fastino", "phaser", "hvamp", "shuttler"]
+                    "enum": ["dio", "dio_spi", "urukul", "novogorny", "sampler", "suservo", "zotino", "grabber", "mirny", "fastino", "phaser", "hvamp", "shuttler", "entangler"]
                 },
                 "board": {
                     "type": "string"
@@ -641,6 +641,35 @@
                         }
                     },
                     "required": ["ports"]
+                }
+            }, {
+                "title": "Entangler",
+                "if": {
+                    "properties": {
+                        "type": {
+                            "const": "entangler"
+                        }
+                    }
+                },
+                "then": {
+                    "properties": {
+                        "input_port": {
+                            "type": "integer",
+                            "min": 0
+                        },
+                        "output_port": {
+                            "type": "integer",
+                            "min": 0
+                        },
+                        "core_link_port": {
+                            "type": "integer",
+                            "min": 0
+                        }
+                    },
+                    "required": [
+                        "input_port",
+                        "output_port"
+                    ]
                 }
             }]
         }

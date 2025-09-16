@@ -206,6 +206,8 @@ class PeripheralManager:
                          name=name,
                          channel=rtio_offset + next(channel))
         return next(channel)
+    
+    
 
     def process_urukul(self, rtio_offset, peripheral):
         urukul_name = self.get_name("urukul")

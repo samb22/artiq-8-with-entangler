@@ -6,7 +6,9 @@ from artiq.gateware import rtio
 from artiq.gateware.rtio.phy import spi2, ad53xx_monitor, dds, grabber
 from artiq.gateware.suservo import servo, pads as servo_pads
 from artiq.gateware.rtio.phy import servo as rtservo, fastino, phaser
+from artiq.gateware.rtio.phy import edge_counter, ttl_simple, ttl_serdes_7series
 
+import entangler.phy
 
 def _eem_signal(i):
     n = "d{}".format(i)
@@ -794,3 +796,90 @@ class Shuttler(_EEM):
     def add_std(cls, target, eem, eem_aux, iostandard=default_iostandard):
         cls.add_extension(target, eem, is_drtio_over_eem=True, iostandard=iostandard)
         target.eem_drtio_channels.append((target.platform.request("shuttler{}_drtio_rx".format(eem), 0), target.platform.request("shuttler{}_drtio_tx".format(eem), 0)))
+
+
+class Entangler(_EEM):
+    """Photonic entanglement core EEM module definitions.
+
+    Depending on whether the core is used as master or slave, three or two EEM
+    connectors are used, respectively.
+
+    eem_core_link is the ribbon cable linking both master and slave cores.
+    eem_dio_outputs consists of 4 TTL outputs (e.g. DIO-BNC) connected to the entangler
+    core; the other 4 channels can be used arbitrarily (see extra_dio_outputs_class).
+    eem_dio_inputs is only required in master/standalone operation and consists of 8
+    SERDES-based TTL inputs (e.g. DIO-BNC), the last 3 of which are not used from the
+    entangler core.
+    """
+
+    @staticmethod
+    def io(eem_core_link, eem_dio_outputs, eem_dio_inputs):
+        ios = []
+        if eem_core_link is not None:
+            ios += [("link{}".format(eem_core_link), i,
+                Subsignal("p", Pins(_eem_pin(eem_core_link, i, "p"))),
+                Subsignal("n", Pins(_eem_pin(eem_core_link, i, "n"))),
+                IOStandard("LVDS_25"))
+                for i in range(8)]
+        ios += [("dio{}".format(eem_dio_outputs), i,
+            Subsignal("p", Pins(_eem_pin(eem_dio_outputs, i, "p"))),
+            Subsignal("n", Pins(_eem_pin(eem_dio_outputs, i, "n"))),
+            IOStandard("LVDS_25"))
+            for i in range(8)]
+        ios += [("dio{}".format(eem_dio_inputs), i,
+            Subsignal("p", Pins(_eem_pin(eem_dio_inputs, i, "p"))),
+            Subsignal("n", Pins(_eem_pin(eem_dio_inputs, i, "n"))),
+            IOStandard("LVDS_25"))
+            for i in range(8)]
+        return ios
+
+    @classmethod
+    def add_std(cls, target, eem_core_link, eem_dio_outputs, eem_dio_inputs,
+            extra_dio_outputs_class=ttl_serdes_7series.InOut_8X):
+        cls.add_extension(target, eem_core_link, eem_dio_outputs, eem_dio_inputs)
+
+        output_pads = []
+        num_outputs = 5
+        output_sigs = [Signal() for _ in range(num_outputs)]
+
+        # Create entangler-driven outputs.
+        for i in range(num_outputs):
+            pads = target.platform.request("dio{}".format(eem_dio_outputs), i)
+            output_pads.append(pads)
+            phy = ttl_simple.Output(output_sigs[i])
+            target.submodules += phy
+            target.rtio_channels.append(rtio.Channel.from_phy(phy))
+
+        # Create extra regular TTL channels on output EEM.
+        for i in range(8 - num_outputs):
+            pads = target.platform.request("dio{}".format(eem_dio_outputs),
+                num_outputs + i)
+            phy = extra_dio_outputs_class(pads.p, pads.n)
+            target.submodules += phy
+            target.rtio_channels.append(rtio.Channel.from_phy(phy))
+
+        # Create regular PHYs for TTL inputs and edge counters.
+        input_phys = []
+        for i in range(8):
+            pads = target.platform.request("dio{}".format(eem_dio_inputs), i)
+            phy = ttl_serdes_7series.InOut_8X(pads.p, pads.n)
+            target.submodules += phy
+            input_phys.append(phy)
+            target.rtio_channels.append(rtio.Channel.from_phy(phy))
+        for phy in input_phys:
+            counter = edge_counter.SimpleEdgeCounter(phy.input_state)
+            target.submodules += counter
+            target.rtio_channels.append(rtio.Channel.from_phy(counter))
+
+        # Alice <-> Bob entangler core link.
+        if eem_core_link is not None:
+            core_link_pads = [target.platform.request("link{}".format(eem_core_link), i)
+                        for i in range(8)]
+        else:
+            core_link_pads = None
+
+        phy = entangler.phy.Entangler(core_link_pads, output_pads, output_sigs, input_phys[0:5])
+        target.submodules += phy
+        target.rtio_channels.append(rtio.Channel.from_phy(phy))
+
+        return phy

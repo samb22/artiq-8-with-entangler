@@ -7,7 +7,7 @@ from artiq.gateware.rtio import rtlink
 def _mk_edges(w, direction):
     l = [(1 << i) - 1 for i in range(w)]
     if direction == "rising":
-        l = [((1 << w) - 1) ^ x for x in l]
+        l = [2**w - 1 ^ x for x in l]
     elif direction == "falling":
         pass
     else:
@@ -65,12 +65,15 @@ class InOut(Module):
         override_en = Signal()
         override_o = Signal()
         override_oe = Signal()
+        self.fine_ts = Signal(log2_int(serdes_width))
+        self.stb_rising = Signal()
+        self.stb_falling = Signal()
         self.overrides = [override_en, override_o, override_oe]
 
         # Output enable, for interfacing to external buffers.
         self.oe = Signal()
-        # input state exposed for edge_counter: latest serdes sample
-        # support for short pulses will need a more involved solution
+        # LSB of the input state (for edge detection; arbitrary choice, support for
+        # short pulses will need a more involved solution).
         self.input_state = Signal()
 
         # # #
@@ -110,18 +113,24 @@ class InOut(Module):
         i = serdes.i[-1]
         self.comb += self.input_state.eq(i)
         i_d = Signal()
+        self.comb += [
+            self.stb_rising.eq( i & ~i_d),
+            self.stb_falling.eq(~i &  i_d),
+        ]
+
         self.sync.rio_phy += [
             i_d.eq(i),
+            self.rtlink.i.stb.eq(
+                sample |
+                (sensitivity[0] & self.stb_rising) |
+                (sensitivity[1] & self.stb_falling)
+            ),
             self.rtlink.i.data.eq(i),
         ]
 
         pe = PriorityEncoder(serdes_width)
         self.submodules += pe
-        self.comb += pe.i.eq(
-            (serdes.i ^ Cat(i_d, serdes.i)) & (
-                (serdes.i & Replicate(sensitivity[0], serdes_width)) |
-                (~serdes.i & Replicate(sensitivity[1], serdes_width))))
-        self.sync.rio_phy += [
-            self.rtlink.i.fine_ts.eq(pe.o),
-            self.rtlink.i.stb.eq(sample | ~pe.n),
-        ]
+        self.comb += pe.i.eq(serdes.i ^ Replicate(i_d, serdes_width))
+        self.comb += self.fine_ts.eq(pe.o)
+        self.sync.rio_phy += self.rtlink.i.fine_ts.eq(self.fine_ts)
+
