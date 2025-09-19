@@ -835,7 +835,7 @@ class Entangler(_EEM):
 
     @classmethod
     def add_std(cls, target, eem_core_link, eem_dio_outputs, eem_dio_inputs,
-            extra_dio_outputs_class=ttl_serdes_7series.Out_8X):
+            extra_dio_outputs_class=ttl_serdes_7series.Output_8X):
         cls.add_extension(target, eem_core_link, eem_dio_outputs, eem_dio_inputs)
 
         output_pads = []
