@@ -23,7 +23,6 @@ class FuzzySelectWidget(LayoutWidget):
 
     def __init__(self,
                  choices: List[Tuple[str, int]] = [],
-                 #entry_count_limit: int = 10,
                  entry_count_limit: int | None = None,
                  *args):
         """
@@ -79,15 +78,17 @@ class FuzzySelectWidget(LayoutWidget):
     def _activate(self):
         self.update_when_text_changed = True
         if not self.menu:
-            self._update_menu()
+            # Make sure the geometry has been processed before showing the popup (in
+            # case the parent has just been created). With an immediate call, the
+            # _QuickOpenDialog() is menu shown slightly misaligned on macOS (though it
+            # appears fine on Windows 10/11).
+            QtCore.QTimer.singleShot(0, self._update_menu)
+
     def _global_menu_pos(self):
         return self.line_edit.mapToGlobal(self.line_edit.rect().bottomLeft())
     
     def _popup_menu(self):
         # Display menu with search results beneath line edit.
-        #menu_pos = self.line_edit.mapToGlobal(self.line_edit.pos())
-        #menu_pos.setY(menu_pos.y() + self.line_edit.height())
-        #self.menu.popup(menu_pos)
         self.menu.popup(self._global_menu_pos())
 
     def _ensure_menu(self):
@@ -150,12 +151,6 @@ class FuzzySelectWidget(LayoutWidget):
             self.line_edit.setFocus()
             return
 
-        # Truncate the list, leaving room for the "<n> not shown" entry.
-        #num_omitted = 0
-        #if len(filtered_choices) > self.entry_count_limit:
-            #num_omitted = len(filtered_choices) - (self.entry_count_limit - 1)
-            #filtered_choices = filtered_choices[:self.entry_count_limit - 1]
-
         # We are going to end up with a menu shown and the line edit losing
         # focus.
         self.abort_when_line_edit_unfocussed = False
@@ -205,7 +200,10 @@ class FuzzySelectWidget(LayoutWidget):
         self.line_edit.installEventFilter(self.line_edit_up_down_filter)
 
         self.abort_when_menu_hidden = True
-        self.menu.show()
+        # Show menu again if it was hidden. As per the Qt docs, it is important to
+        # use popup() here instead of show(), which would indeed lead to wrong
+        # positioning on Windows 11.
+        self._popup_menu()
         if first_action:
             self.menu.setActiveAction(first_action)
             self.menu.setFocus()
