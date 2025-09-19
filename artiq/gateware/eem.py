@@ -851,7 +851,7 @@ class Entangler(_EEM):
             target.submodules += phy
             target.rtio_channels.append(rtio.Channel.from_phy(phy))
 
-        # Create extra regular TTL channels on output EEM.
+        # Create extra regular TTL channels on output EEM. Note that extra_dio_outputs_class is set to Output, not InOut.
         for i in range(8 - num_outputs):
             pads = target.platform.request("dio{}".format(eem_dio_outputs),
                 num_outputs + i)
