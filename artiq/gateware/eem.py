@@ -841,6 +841,7 @@ class Entangler(_EEM):
         output_pads = []
         num_outputs = 5
         output_sigs = [Signal() for _ in range(num_outputs)]
+        extra_output_sigs = [Signal() for _ in range(num_outputs,8)]
 
         # Create entangler-driven outputs.
         for i in range(num_outputs):
@@ -854,7 +855,8 @@ class Entangler(_EEM):
         for i in range(8 - num_outputs):
             pads = target.platform.request("dio{}".format(eem_dio_outputs),
                 num_outputs + i)
-            phy = extra_dio_outputs_class(pads.p, pads.n)
+            #phy = extra_dio_outputs_class(pads.p, pads.n)
+            phy = ttl_simple.Output(extra_output_sigs[i])   #Changing extra_dio_ouputs to output only
             target.submodules += phy
             target.rtio_channels.append(rtio.Channel.from_phy(phy))
 
